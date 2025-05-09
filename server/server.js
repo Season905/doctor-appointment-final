@@ -2,99 +2,143 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+const helmet = require('helmet');
 require('dotenv').config();
 
 // Initialize Express
 const app = express();
 
+// Configuration
+const config = {
+  port: process.env.PORT || 5000,
+  nodeEnv: process.env.NODE_ENV || 'development',
+  mongoUri: process.env.MONGO_URI,
+  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000'
+};
+
+// Validate required environment variables
+const requiredEnvVars = ['MONGO_URI'];
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    console.error(`Missing required environment variable: ${envVar}`);
+    process.exit(1);
+  }
+}
+
 // Database Connection
 const connectDB = async () => {
   try {
     console.log('Attempting to connect to MongoDB...');
-    console.log('Connection URI:', process.env.MONGO_URI);
-
-    const conn = await mongoose.connect(process.env.MONGO_URI);
-    console.log('MongoDB Connected Successfully');
-    console.log('Database Name:', conn.connection.name);
-    console.log('Database Host:', conn.connection.host);
-    console.log('Database Port:', conn.connection.port);
-
-    // Log all collections in the database
-    const collections = await mongoose.connection.db.listCollections().toArray();
-    console.log('Available Collections:', collections.map(c => c.name));
-
-  } catch (err) {
-    console.error('MongoDB Connection Error:', err);
-    console.error('Error Details:', {
-      message: err.message,
-      code: err.code,
-      name: err.name
+    const conn = await mongoose.connect(config.mongoUri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
     });
+
+    console.log(`MongoDB Connected: ${conn.connection.host}`);
+    return conn;
+  } catch (err) {
+    console.error('MongoDB Connection Error:', err.message);
     process.exit(1);
   }
 };
 
 // Middleware
+app.use(helmet()); // Security headers
 app.use(cors({
-  origin: 'http://localhost:3000',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: config.corsOrigin,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Security headers
-app.use((req, res, next) => {
-  res.header('X-Content-Type-Options', 'nosniff');
-  res.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
-  next();
-});
+// Request logging middleware
+if (config.nodeEnv === 'development') {
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
+  });
+}
+
+// API Routes
+const routes = [
+  { path: '/api/users', router: require('./routes/userRoutes') },
+  { path: '/api/doctors', router: require('./routes/doctorRoutes') },
+  { path: '/api/appointments', router: require('./routes/appointmentRoutes') },
+  { path: '/api/stats', router: require('./routes/statsRoutes') },
+  { path: '/api/admin', router: require('./routes/adminRoutes') }
+];
 
 // Connect to database and start server
 const startServer = async () => {
-  await connectDB();
+  try {
+    await connectDB();
 
-  // API Routes
-  app.use('/api/users', require('./routes/userRoutes'));
-  app.use('/api/doctors', require('./routes/doctorRoutes'));
-  app.use('/api/appointments', require('./routes/appointmentRoutes'));
-  app.use('/api/stats', require('./routes/statsRoutes'));
-  app.use('/api/admin', require('./routes/adminRoutes'));
-
-  // Production setup
-  if (process.env.NODE_ENV === 'production') {
-    app.use(express.static(path.join(__dirname, '../client/build')));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+    // Register routes
+    routes.forEach(route => {
+      app.use(route.path, route.router);
+      console.log(`Route registered: ${route.path}`);
     });
-  }
 
-  // Error Handling
-  app.use((req, res) => {
-    res.status(404).json({ success: false, error: 'Endpoint not found' });
-  });
+    // Production setup
+    if (config.nodeEnv === 'production') {
+      app.use(express.static(path.join(__dirname, '../client/build')));
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+      });
+    }
 
-  app.use((err, req, res, next) => {
-    console.error('Server Error:', err);
-    console.error('Error Stack:', err.stack);
-    console.error('Request Body:', req.body);
-    console.error('Request Headers:', req.headers);
+    // 404 Handler
+    app.use((req, res) => {
+      res.status(404).json({
+        success: false,
+        error: 'Endpoint not found',
+        path: req.path
+      });
+    });
 
-    res.status(500).json({
-      success: false,
-      error: process.env.NODE_ENV === 'development' ? {
+    // Error Handler
+    app.use((err, req, res, next) => {
+      console.error('Server Error:', {
         message: err.message,
-        stack: err.stack,
-        name: err.name
-      } : 'Server error'
-    });
-  });
+        stack: config.nodeEnv === 'development' ? err.stack : undefined,
+        path: req.path,
+        method: req.method
+      });
 
-  // Start server
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode`);
-    console.log(`Server listening on port ${PORT}`);
-  });
+      res.status(err.status || 500).json({
+        success: false,
+        error: config.nodeEnv === 'development' ? {
+          message: err.message,
+          stack: err.stack
+        } : 'Internal server error'
+      });
+    });
+
+    // Start server
+    app.listen(config.port, () => {
+      console.log(`Server running in ${config.nodeEnv} mode`);
+      console.log(`Server listening on port ${config.port}`);
+      console.log(`CORS enabled for origin: ${config.corsOrigin}`);
+    });
+
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
 };
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Rejection:', err);
+  process.exit(1);
+});
 
 startServer();
