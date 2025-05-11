@@ -1,44 +1,29 @@
 {
-  "name": "server",
+  "name": "doctor-appointment-system",
   "version": "1.0.0",
+  "description": "A doctor appointment system",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
-    "create-admin": "node scripts/createAdmin.js",
-    "seed-doctors": "node scripts/seedDoctors.js"
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js",
+    "create-admin": "node server/createAdmin.js",
+    "client": "cd client && npm start",
+    "server": "nodemon server/server.js",
+    "dev": "concurrently \"npm run server\" \"npm run client\""
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@fortawesome/react-fontawesome": "^0.2.2",
-    "@restart/hooks": "^0.6.2",
-    "@restart/ui": "^1.9.4",
-    "bcrypt": "^5.1.1",
-    "bcryptjs": "^3.0.2",
-    "bootstrap": "^5.3.3",
+    "bcryptjs": "^2.4.3",
+    "bootstrap": "^5.3.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "express-async-handler": "^1.2.0",
-    "express-rate-limit": "^7.5.0",
-    "express-validator": "^7.2.1",
-    "framer-motion": "^12.6.3",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.13.1",
-    "nodemailer": "^6.10.0",
-    "react": "^18.2.0",
-    "react-bootstrap": "^2.10.9",
-    "react-dom": "^18.2.0",
-    "react-icons": "^5.5.0",
-    "react-router-dom": "^6.3.0",
-    "stripe": "^17.7.0",
-    "validator": "^13.15.0"
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^7.0.3",
+    "react-bootstrap": "^2.9.0"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.0.0",
-    "@testing-library/react": "^14.0.0"
-  },
-  "description": ""
+    "concurrently": "^8.0.1",
+    "nodemon": "^2.0.22"
+  }
 }
