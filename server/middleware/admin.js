@@ -1,3 +1,6 @@
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
 const admin = async (req, res, next) => {
   // Check if user exists in request
   if (!req.user) {
@@ -33,16 +36,28 @@ const admin = async (req, res, next) => {
 
   next();
 };
-const adminAuth = (req, res, next) => {
-  if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({
-      success: false,
-      error: 'Admin privileges required'
-    });
-  }
-  next();
-};
 
+const adminAuth = async (req, res, next) => {
+  try {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ message: 'No token, authorization denied' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const admin = await User.findOne({ _id: decoded.id, role: 'admin' });
+
+    if (!admin) {
+      return res.status(401).json({ message: 'Not authorized as admin' });
+    }
+
+    req.admin = admin;
+    next();
+  } catch (error) {
+    res.status(401).json({ message: 'Token is not valid' });
+  }
+};
 
 module.exports = {
   admin,
